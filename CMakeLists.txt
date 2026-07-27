@@ -112,6 +112,12 @@ pico_sdk_init()
 add_executable(ds5-bridge
         src/usb_descriptors.cpp
         src/main.cpp
+        src/dualsense_parser.cpp
+        src/switch_pro_protocol.cpp
+        src/switch_rumble.cpp
+        src/switch_rumble_adapter.cpp
+        src/switch_pro_usb.cpp
+        src/usb_mode.cpp
         src/usb.cpp
         src/audio.cpp
         src/bt.cpp

@@ -14,6 +14,7 @@
 #include "hardware/structs/ioqspi.h"
 #include "hardware/structs/sio.h"
 #include "pico/bootrom.h"
+#include "usb_mode.h"
 #if PICO_RP2350
 #include "hardware/regs/sio.h"
 #endif
@@ -70,13 +71,8 @@ static void button_dispatch(int clicks) {
     if (clicks <= 1) {
         bt_bootsel_click_action(); // single click -> pair / switch controller
     } else if (clicks == 2) {
-        // double click -> normal reboot. A Cortex-M33 SYSRESETREQ does a warm
-        // reset that re-runs the flash app; a watchdog reset instead drops the
-        // RP2350 bootrom into BOOTSEL, which is why watchdog_reboot/enable bricked.
-        printf("[BTN] BOOTSEL double click - reboot\n");
-        *((volatile uint32_t *) 0xe000ed0c) = 0x05fa0004; // SCB AIRCR: VECTKEY | SYSRESETREQ
-        __dsb();
-        while (true) { tight_loop_contents(); } // wait for the reset
+        printf("[BTN] BOOTSEL double click - toggle USB output mode\n");
+        usb_mode_toggle_and_reconnect();
     } else {
         // triple click -> reboot into BOOTSEL (USB mass storage) for reflashing.
         printf("[BTN] BOOTSEL triple click - reboot to BOOTSEL\n");
@@ -86,7 +82,9 @@ static void button_dispatch(int clicks) {
 
 // Poll BOOTSEL at 10 Hz and dispatch single / double / triple click + hold:
 //   - hold (>= HOLD_SAMPLES, ~1.5 s) -> clear all pairings
-//   - 1 click  -> pair / switch        2 clicks -> reboot        3 clicks -> BOOTSEL
+//   - 1 click  -> pair / switch controller
+//   - 2 clicks -> toggle USB output mode
+//   - 3 clicks -> BOOTSEL
 // Clicks are counted across the inter-click window; the action fires when it closes.
 // Also services the deferred blacklist persist on the same cadence.
 void button_check() {

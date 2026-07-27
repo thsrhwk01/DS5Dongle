@@ -14,6 +14,7 @@
 #include "pico/time.h"
 #include "audio.h"
 #include "wake.h"
+#include "usb_mode.h"
 
 extern bool spk_active;
 
@@ -94,6 +95,7 @@ void pico_cmd_set(uint8_t report_id, uint8_t const *buffer, uint16_t bufsize) {
         printf("[CMD] Enter tud reconnect func\n");
         wake_note_usb_reconnect();   // this disconnect is intentional, not a host sleep
         tud_disconnect();
+        usb_mode_apply_config();
         sleep_ms(150);
         tud_connect();
     }

@@ -26,6 +26,8 @@
 #include "bsp/board_api.h"
 #include "tusb.h"
 #include "config.h"
+#include "switch_pro_usb.h"
+#include "usb_mode.h"
 
 #ifndef ENABLE_SERIAL
 #define ENABLE_SERIAL 0
@@ -125,6 +127,7 @@ tusb_desc_device_t desc_device =
 // Invoked when received GET DEVICE DESCRIPTOR
 // Application return pointer to descriptor
 uint8_t const *tud_descriptor_device_cb(void) {
+    if (usb_mode_is_switch()) return switch_pro_device_descriptor();
     desc_device.idProduct = ds_mode() ? 0x0CE6 : 0x0DF2;
     desc_device.iSerialNumber = get_config().enable_usb_sn ? 0x03 : 0x00;
     // USB 2.1 (so the host requests the BOS / MS OS 2.0 selective-suspend opt-in)
@@ -446,6 +449,7 @@ uint8_t descriptor_configuration[] = {
 // Descriptor contents must exist long enough for transfer to complete
 uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
     (void) index; // for multiple configurations
+    if (usb_mode_is_switch()) return switch_pro_configuration_descriptor();
     auto bInterval = 0x01;
     switch (get_config().polling_rate_mode) {
         case 0:
@@ -904,6 +908,7 @@ _Static_assert(sizeof(desc_hid_report_kbd) == 45, "keyboard report descriptor le
 // Application return pointer to descriptor
 // Descriptor contents must exist long enough for transfer to complete
 uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf) {
+    if (usb_mode_is_switch()) return switch_pro_report_descriptor();
 #ifdef ENABLE_WAKE_HID
     // HID instance 1 is the wake-only boot keyboard added by ENABLE_WAKE_HID.
     if (itf == 1) return desc_hid_report_kbd;
@@ -939,9 +944,14 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
     (void) langid;
     size_t chr_count;
 
-    if (ds_mode()) {
+    if (usb_mode_is_switch()) {
+        string_desc_arr[1] = "Pico DualSense Bridge";
+        string_desc_arr[2] = "Pro Controller";
+    } else if (ds_mode()) {
+        string_desc_arr[1] = "Sony Interactive Entertainment";
         string_desc_arr[2] = "DualSense Wireless Controller";
     }else {
+        string_desc_arr[1] = "Sony Interactive Entertainment";
         string_desc_arr[2] = "DualSense Edge Wireless Controller";
     }
 
@@ -1021,6 +1031,7 @@ uint8_t const desc_bos[] = {
 };
 
 uint8_t const *tud_descriptor_bos_cb(void) {
+    if (usb_mode_is_switch()) return nullptr;
     // BOS carries the MS OS 2.0 selective-suspend opt-in, only meaningful for wake.
     // When wake is off the device is USB 2.0 and the host won't ask -- guard anyway.
     if (!get_config().enable_wake) return nullptr;
@@ -1068,6 +1079,7 @@ TU_VERIFY_STATIC(sizeof(desc_ms_os_20) == MS_OS_20_DESC_LEN, "MS OS 2.0 descript
 // platform capability, then issues this vendor request to fetch the
 // descriptor set itself.
 bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const *request) {
+    if (usb_mode_is_switch()) return false;
     if (!get_config().enable_wake) return false;
     if (stage != CONTROL_STAGE_SETUP) return true;
     if (request->bmRequestType_bit.type != TUSB_REQ_TYPE_VENDOR) return false;

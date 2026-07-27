@@ -16,7 +16,8 @@
 #include "pico/flash.h"
 
 constexpr uint32_t CONFIG_MAGIC = 0x66ccff00;
-constexpr uint16_t CONFIG_VERSION = 5; // 如果想要强制重置配置，再更新 CONFIG_VERSION。
+constexpr uint16_t CONFIG_VERSION = 6; // v6 appends the persistent USB output mode.
+constexpr uint16_t PREVIOUS_CONFIG_VERSION = 5;
 constexpr uint32_t CONFIG_FLASH_OFFSET = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 static Config config{};
 bool is_dse = false;
@@ -46,7 +47,16 @@ void config_valid() {
         printf("[Config] Config Body size is invalid\n");
     }
     auto body = &config.body;
-    if (body->config_version != CONFIG_VERSION) {
+    if (body->config_version == PREVIOUS_CONFIG_VERSION) {
+        // Config_body v6 only appends one byte. Preserve all v5 user settings
+        // and default the new profile to the existing DualSense behavior.
+        body->config_version = CONFIG_VERSION;
+        // A genuine v5 flash page has 0xff in the appended byte. Keeping an
+        // already-valid value also lets older web config clients update their
+        // shorter v5 body without silently changing the active USB profile.
+        if (body->usb_output_mode > 1) body->usb_output_mode = 0;
+        printf("[Config] Migrated config v5 to v6\n");
+    } else if (body->config_version != CONFIG_VERSION) {
         memset(body, 0xFF, sizeof(Config_body));
         body->config_version = CONFIG_VERSION;
         printf("[Config] Warning: Config may breaking change. Reset to default\n");
@@ -122,6 +132,10 @@ void config_valid() {
     if (body->status_gpio_mode > STATUS_GPIO_MODE_BUTTON) {
         body->status_gpio_mode = 0;
         printf("[Config] status_gpio_mode is invalid\n");
+    }
+    if (body->usb_output_mode > 1) {
+        body->usb_output_mode = 0;
+        printf("[Config] usb_output_mode is invalid\n");
     }
 }
 

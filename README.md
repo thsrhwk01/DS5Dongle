@@ -1,15 +1,15 @@
-# Pico2W DualSense 5 Bridge
+# Pico2W DualSense / Switch Pro Bridge
 
 [中文](./README.CN.md)
 
-> Turn a Raspberry Pi Pico2W (or other compatible board) into a wireless adapter for the DualSense (DS5) controller.
+> Bridge a Bluetooth DualSense controller to a USB DualSense or Nintendo Switch Pro Controller profile.
 
 ***This repository only implements the core functionality of DS5Dongle — making a wireless controller appear as a wired
 connection. For additional features, please refer to [Community Fork](#Community-Fork)***
 
 ## Overview
 
-This project enables the Raspberry Pi Pico2W (or other compatible board, e.g. the Waveshare RP2350B-Plus-W) to function as a Bluetooth bridge for the DualSense controller, allowing wireless connectivity with enhanced haptics support.
+This project enables the Raspberry Pi Pico2W (or another compatible board, e.g. the Waveshare RP2350B-Plus-W) to bridge a Bluetooth DualSense or DualSense Edge controller to either a USB DualSense device or a USB Nintendo Switch Pro Controller profile.
 
 ## Features
 
@@ -18,7 +18,8 @@ This project enables the Raspberry Pi Pico2W (or other compatible board, e.g. th
 - 🎧 Headset audio output — controller speaker and 3.5 mm jack
 - 🎤 Headset microphone input — the controller mic is exposed as a USB audio input device
 - 📡 Wireless Bluetooth bridging
-- 🔘 BOOTSEL-button controller management — pair, reboot, enter BOOTSEL for flashing, or forget all pairings without unplugging
+- 🎮 Runtime-selectable DualSense and Nintendo Switch Pro USB profiles
+- 🔘 BOOTSEL-button management — pair, change USB profile, enter BOOTSEL for flashing, or forget pairings without unplugging
 - ⚡ Runs at the stock 150 MHz clock — no overclock required
 
 ## Getting Started
@@ -52,10 +53,30 @@ You have two options:
 
 ***You may need to replug the Pico when the controller is in pairing mode.***
 
-### BOOTSEL button: switch, reboot, or clear controllers
+### USB output modes
+
+The default profile is **DualSense** for Windows. While the firmware is running,
+double-click BOOTSEL to switch to **Nintendo Switch Pro Controller** output; double-click
+again to return to DualSense. The selected profile is saved in flash and restored on
+the next boot. USB disconnects and reconnects automatically when the profile changes.
+
+Do not hold BOOTSEL while plugging the Pico in to select a profile: the RP2350 boot ROM
+uses that gesture for UF2 flashing, so the application firmware does not run. Profile
+selection is deliberately a runtime double click.
+
+For Switch 2, enable **Nintendo Switch Pro Controller Wired Communication** in the
+console settings. The Switch profile supports buttons, D-pad, both sticks, digital
+ZL/ZR, Plus/Minus, Home, Capture, pairing/reconnection, USB initialization, motion
+sensors, and rumble. DualSense gyro/accelerometer samples are transformed into the
+Switch Pro coordinate system and native units, with the three most recent samples sent
+in each full input report. Switch HD Rumble is down-mixed into the DualSense compatible
+heavy/light rumble bands; it cannot retain the original left/right HD-haptic spatial
+detail. NFC/amiibo is out of scope.
+
+### BOOTSEL button: pair, change USB mode, or clear controllers
 
 While the firmware is running, the Pico's **BOOTSEL button** doubles as a
-controller and reset control — no unplugging or re-flashing needed:
+controller and USB-profile control — no unplugging or re-flashing needed:
 
 - **Short press (click):**
   - If a controller is connected, the current one is disconnected (its pairing is
@@ -64,9 +85,9 @@ controller and reset control — no unplugging or re-flashing needed:
   - If nothing is connected, a 30-second scan starts to pair a new controller.
     Put the DualSense into pairing mode (hold **PS + Create/Share** until the
     light bar flashes) while the scan runs.
-- **Double click:** **Reboot the Pico** — a normal firmware restart: re-enters
-  pairing inquiry, drops the current connection, and recovers from a transient
-  glitch. (Clicks register after a brief pause, to allow for a second/third click.)
+- **Double click:** switch between **DualSense** and **Switch Pro** USB output,
+  persist the selection, and reconnect USB. (Clicks register after a brief pause,
+  to allow for a second/third click.)
 - **Triple click:** **Reboot into BOOTSEL** — the dongle re-enumerates as a USB
   mass-storage drive so you can drag on a new `.uf2`, without holding BOOTSEL while
   plugging in.

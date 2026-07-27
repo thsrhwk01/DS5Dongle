@@ -7,7 +7,7 @@
 
 // Poll the BOOTSEL button at 10 Hz and dispatch gestures:
 //   single click  -> pair another controller   (bt_bootsel_click_action)
-//   double click  -> reboot the Pico
+//   double click  -> toggle DualSense / Switch Pro USB mode
 //   ~1.5 s hold   -> clear all pairings         (bt_bootsel_hold_action)
 void button_check();
 

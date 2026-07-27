@@ -28,6 +28,9 @@
 #include "cmd.h"
 #include "dse.h"
 #include "status_gpio.h"
+#include "dualsense_parser.h"
+#include "switch_pro_usb.h"
+#include "usb_mode.h"
 #if ENABLE_BATT_LED
 #include "battery_led.h"
 #endif
@@ -54,6 +57,10 @@ critical_section_t report_cs;
 volatile bool report_dirty = false;
 
 void __not_in_flash_func(interrupt_loop)() {
+    if (usb_mode_is_switch()) {
+        switch_pro_usb_task();
+        return;
+    }
     if (!tud_hid_ready()) return;
 
     // TODO: Refactor for better code reuse
@@ -94,6 +101,19 @@ void __not_in_flash_func(interrupt_loop)() {
 void __not_in_flash_func(on_bt_data)(CHANNEL_TYPE channel, uint8_t *data, uint16_t len) {
     // printf("[Main] BT data callback: channel=%u len=%u\n", channel, len);
     if (channel == INTERRUPT && len > 2 && data[1] == 0x31) {
+        if (usb_mode_is_switch()) {
+            if (len < 66 || ((data[2] >> 1) & 1)) return;
+            ControllerState state{};
+            if (dualsense_parse_input(data + 3, len - 3, state)) {
+                memcpy(interrupt_in_data, data + 3, sizeof(interrupt_in_data));
+                switch_pro_usb_update(state);
+#if ENABLE_BATT_LED
+                battery_led_note_report();
+#endif
+            }
+            return;
+        }
+        if (len < 66) return;
         // Mic audio: controller signals mic payload via bit1 of data[2];
         // the opus-encoded mic frame starts at data+4.
         if ((data[2] >> 1) & 1) {
@@ -160,6 +180,9 @@ void __not_in_flash_func(on_bt_data)(CHANNEL_TYPE channel, uint8_t *data, uint16
 // Return zero will cause the stack to STALL request
 uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t *buffer,
                                uint16_t reqlen) {
+    if (usb_mode_is_switch()) {
+        return switch_pro_usb_get_report(report_id, report_type, buffer, reqlen);
+    }
 #ifdef ENABLE_WAKE_HID
     if (itf == 1) {
         if (reqlen >= 8) {
@@ -216,6 +239,10 @@ bool tud_audio_set_itf_cb(uint8_t rhport, tusb_control_request_t const *p_reques
 // received data on OUT endpoint ( Report ID = 0, Type = 0 )
 void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t const *buffer,
                            uint16_t bufsize) {
+    if (usb_mode_is_switch()) {
+        switch_pro_usb_set_report(report_id, report_type, buffer, bufsize);
+        return;
+    }
 #ifdef ENABLE_WAKE_HID
     if (itf == 1) {
         // Drop keyboard SET_REPORT (host LED state).
@@ -295,6 +322,10 @@ int main() {
 #endif
 
     board_init();
+    // USB descriptors are mode-dependent. Load the persisted profile before
+    // TinyUSB can answer the host's first enumeration request.
+    config_load();
+    usb_mode_init();
     tusb_rhport_init_t dev_init = {
         .role = TUSB_ROLE_DEVICE,
         .speed = TUSB_SPEED_FULL
@@ -344,9 +375,7 @@ int main() {
     critical_section_init(&report_cs);
     wake_init();
 
-    config_load();
     gpio_on_disconnect();
-
     bt_init();
     bt_register_data_callback(on_bt_data);
 
@@ -362,8 +391,10 @@ int main() {
 #endif
         cyw43_arch_poll();
         tud_task();
-        wake_task();
-        audio_loop();
+        if (!usb_mode_is_switch()) {
+            wake_task();
+            audio_loop();
+        }
 #if ENABLE_DEBUG
         debug_log_core1_stack_usage();
 #endif
@@ -372,6 +403,7 @@ int main() {
         battery_led_tick();
 #endif
         button_check();
+        usb_mode_task();
         bt_inquiring_led();
         dse_task();
     }

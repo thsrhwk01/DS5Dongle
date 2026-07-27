@@ -214,8 +214,8 @@ struct __attribute__((packed)) USBGetStateData { // 63
 /*10  #1# uint8_t UNK2; // appears unused
 /*11  #1# uint32_t UNK_COUNTER; // Linux driver calls this reserved, tools leak calls the 2 high bytes "random"
 /*15  #1# int16_t AngularVelocityX;
-/*17  #1# int16_t AngularVelocityZ;
-/*19  #1# int16_t AngularVelocityY;
+/*17  #1# int16_t AngularVelocityY;
+/*19  #1# int16_t AngularVelocityZ;
 /*21  #1# int16_t AccelerometerX;
 /*23  #1# int16_t AccelerometerY;
 /*25  #1# int16_t AccelerometerZ;

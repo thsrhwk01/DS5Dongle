@@ -16,8 +16,9 @@ Requires: pip install hidapi
 
 Examples:
   python config_tool.py get
-  python config_tool.py set speaker_volume=90 enable_wake=1
+  python config_tool.py set speaker_volume=90 enable_wake=1 --reconnect
   python config_tool.py set haptics_gain=1.5 --no-save
+  python config_tool.py reconnect
   python config_tool.py fields
 """
 import argparse
@@ -49,7 +50,7 @@ FUNC_RECONNECT = 0x03    # reconnect tinyusb device
 SET_DATA_LEN = 63        # data bytes after the report id (descriptor report count 0x3F)
 FEATURE_REPORT_LEN = SET_DATA_LEN + 1  # report id + descriptor report count
 
-CONFIG_VERSION = 5       # src/config.cpp CONFIG_VERSION (display only)
+CONFIG_VERSION = 6       # src/config.cpp CONFIG_VERSION (display only)
 
 # struct.pack/unpack codes per field kind.
 KIND_TO_CODE = {"u8": "B", "float": "f"}
@@ -78,6 +79,7 @@ FIELDS = [
     ("lock_volume",        "u8",    lambda v: v in (0, 1),       "0/1 (ignore the volume change from SetStateData(game or software))"),
     ("status_gpio_pin",    "u8",    lambda v: 0 <= v <= 255,     "GPIO number (255 disables; firmware rejects board-reserved pins)"),
     ("status_gpio_mode",   "u8",    lambda v: v in (0, 1),       "0:pull high 1:200ms button pulse"),
+    ("usb_output_mode",    "u8",    lambda v: v in (0, 1),       "0:DualSense 1:Switch Pro (reconnect after changing)"),
 ]
 FIELD_NAMES = [f[0] for f in FIELDS]
 # Little-endian, no padding -- matches __attribute__((packed)) Config_body.
@@ -158,6 +160,11 @@ def write_config(dev, cfg, save):
         dev.send_feature_report(bytes([REPORT_SET]) + save_data)
 
 
+def request_reconnect(dev):
+    data = bytes([FUNC_RECONNECT]).ljust(SET_DATA_LEN, b"\x00")
+    dev.send_feature_report(bytes([REPORT_SET]) + data)
+
+
 def fmt_value(name, value):
     if name == "haptics_gain":
         return f"{value:.3f}"
@@ -222,6 +229,8 @@ def cmd_set(args):
         cfg.update(updates)
         write_config(dev, cfg, save=not args.no_save)
         new_cfg = read_config(dev)
+        if args.reconnect:
+            request_reconnect(dev)
     finally:
         dev.close()
     print("Updated:" + ("" if args.no_save else " (saved to flash)"))
@@ -235,17 +244,29 @@ def cmd_set(args):
             print(f"  note: {name} was clamped by firmware to {fmt_value(name, got)}")
 
 
+def cmd_reconnect(_args):
+    dev = open_device()
+    try:
+        request_reconnect(dev)
+    finally:
+        dev.close()
+    print("USB reconnect requested.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Read and modify ds5dongle config over USB HID.")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("get", help="read and print the current config").set_defaults(func=cmd_get)
     sub.add_parser("fields", help="list configurable fields and ranges").set_defaults(func=cmd_fields)
+    sub.add_parser("reconnect", help="apply USB-profile settings and reconnect").set_defaults(func=cmd_reconnect)
 
     p_set = sub.add_parser("set", help="set one or more fields (name=value ...)")
     p_set.add_argument("assignments", nargs="+", metavar="name=value")
     p_set.add_argument("--no-save", action="store_true",
                        help="update RAM only; do not persist to flash")
+    p_set.add_argument("--reconnect", action="store_true",
+                       help="reconnect USB after applying settings (needed for usb_output_mode)")
     p_set.set_defaults(func=cmd_set)
 
     args = parser.parse_args()
