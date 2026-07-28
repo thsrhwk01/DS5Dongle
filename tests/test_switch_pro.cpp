@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include "dualsense_parser.h"
+#include "switch_haptics_synth.h"
 #include "switch_pro_protocol.h"
 #include "switch_rumble.h"
 
@@ -218,16 +219,33 @@ void test_switch_rumble_conversion() {
         0x00, 0x01, 0x40, 0x40,
     };
     const SwitchRumbleState maximum = switch_decode_hd_rumble(maximum_left);
-    assert(maximum.heavy >= 250);
-    assert(maximum.light >= 250);
+    assert(maximum.left.low.amplitude >= 250);
+    assert(maximum.left.high.amplitude >= 250);
+    assert(maximum.left.low.frequency_hz >= 159 && maximum.left.low.frequency_hz <= 161);
+    assert(maximum.left.high.frequency_hz >= 79 && maximum.left.high.frequency_hz <= 81);
+    assert(maximum.right.low.amplitude == 0);
+    assert(maximum.right.high.amplitude == 0);
+    // Canonical neutral actuator frequencies are retained even at zero
+    // amplitude, so enabling vibration does not create a discontinuity.
+    assert(maximum.right.low.frequency_hz >= 159 && maximum.right.low.frequency_hz <= 161);
+    assert(maximum.right.high.frequency_hz >= 319 && maximum.right.high.frequency_hz <= 321);
 
     const uint8_t split_bands[8] = {
         0x00, 0x64, 0x40, 0x4a, // high code 50, low code 20
         0x00, 0x3c, 0x40, 0x63, // high code 30, low code 70
     };
     const SwitchRumbleState split = switch_decode_hd_rumble(split_bands);
-    assert(split.heavy > split.light);
-    assert(split.light > 0);
+    assert(split.right.low.amplitude > split.left.high.amplitude);
+    assert(split.left.low.amplitude > 0);
+    assert(split.left.high.amplitude > 0);
+
+    const uint8_t frequency_limits[8] = {
+        0xfc, 0x01, 0x7f, 0x40,
+        0x00, 0x01, 0x40, 0x40,
+    };
+    const SwitchRumbleState limits = switch_decode_hd_rumble(frequency_limits);
+    assert(limits.left.high.frequency_hz >= 1240 && limits.left.high.frequency_hz <= 1265);
+    assert(limits.left.low.frequency_hz >= 620 && limits.left.low.frequency_hz <= 635);
 
     SwitchProProtocol protocol;
     ready_protocol(protocol);
@@ -241,7 +259,7 @@ void test_switch_rumble_conversion() {
     protocol.handle_output_report(0, packet, sizeof(packet));
     assert(protocol.next_report(3, out));
     assert(protocol.take_rumble(pending));
-    assert(pending == SwitchRumbleState{});
+    assert(pending.silent());
 
     std::memset(packet, 0, sizeof(packet));
     packet[0] = 0x10;
@@ -249,6 +267,54 @@ void test_switch_rumble_conversion() {
     protocol.handle_output_report(0, packet, sizeof(packet));
     assert(protocol.take_rumble(pending));
     assert(pending == maximum);
+}
+
+size_t count_positive_crossings(const int8_t *samples, size_t frames, size_t channel) {
+    size_t crossings = 0;
+    int8_t previous = samples[channel];
+    for (size_t frame = 1; frame < frames; ++frame) {
+        const int8_t current = samples[frame * 2 + channel];
+        if (previous <= 0 && current > 0) ++crossings;
+        previous = current;
+    }
+    return crossings;
+}
+
+void test_switch_haptics_synth() {
+    SwitchRumbleState state{};
+    state.left.low = {.frequency_hz = 160, .amplitude = 220};
+    state.right.high = {.frequency_hz = 320, .amplitude = 220};
+
+    SwitchHapticsSynth synth;
+    synth.set_state(state);
+    int8_t samples[SWITCH_HAPTICS_SAMPLE_RATE * 2]{};
+    synth.render(samples, SWITCH_HAPTICS_SAMPLE_RATE);
+    assert(!synth.silent());
+
+    const size_t left_crossings =
+        count_positive_crossings(samples, SWITCH_HAPTICS_SAMPLE_RATE, 0);
+    const size_t right_crossings =
+        count_positive_crossings(samples, SWITCH_HAPTICS_SAMPLE_RATE, 1);
+    assert(left_crossings >= 158 && left_crossings <= 162);
+    assert(right_crossings >= 318 && right_crossings <= 322);
+
+    bool left_nonzero = false;
+    bool right_nonzero = false;
+    for (size_t frame = 0; frame < SWITCH_HAPTICS_SAMPLE_RATE; ++frame) {
+        left_nonzero |= samples[frame * 2] != 0;
+        right_nonzero |= samples[frame * 2 + 1] != 0;
+    }
+    assert(left_nonzero && right_nonzero);
+
+    // A stop command ramps down within 16 samples, then remains exactly zero.
+    synth.set_state({});
+    int8_t stopped[SWITCH_HAPTICS_PACKET_FRAMES * 2]{};
+    synth.render(stopped, SWITCH_HAPTICS_PACKET_FRAMES);
+    assert(synth.silent());
+    for (size_t frame = 16; frame < SWITCH_HAPTICS_PACKET_FRAMES; ++frame) {
+        assert(stopped[frame * 2] == 0);
+        assert(stopped[frame * 2 + 1] == 0);
+    }
 }
 
 } // namespace
@@ -259,6 +325,7 @@ int main() {
     test_subcommands_and_spi();
     test_switch_imu_conversion();
     test_switch_rumble_conversion();
+    test_switch_haptics_synth();
     std::cout << "switch_pro host tests passed\n";
     return 0;
 }

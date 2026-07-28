@@ -115,6 +115,7 @@ add_executable(ds5-bridge
         src/dualsense_parser.cpp
         src/switch_pro_protocol.cpp
         src/switch_rumble.cpp
+        src/switch_haptics_synth.cpp
         src/switch_rumble_adapter.cpp
         src/switch_pro_usb.cpp
         src/usb_mode.cpp

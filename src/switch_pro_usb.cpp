@@ -120,6 +120,7 @@ void switch_pro_usb_update(const ControllerState &state) {
 }
 
 void switch_pro_usb_task() {
+    switch_rumble_adapter_task();
     if (!tud_hid_ready()) return;
     uint8_t report[SWITCH_PRO_REPORT_SIZE];
     const uint32_t now = to_ms_since_boot(get_absolute_time());

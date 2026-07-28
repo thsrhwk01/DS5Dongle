@@ -69,9 +69,13 @@ console settings. The Switch profile supports buttons, D-pad, both sticks, digit
 ZL/ZR, Plus/Minus, Home, Capture, pairing/reconnection, USB initialization, motion
 sensors, and rumble. DualSense gyro/accelerometer samples are transformed into the
 Switch Pro coordinate system and native units, with the three most recent samples sent
-in each full input report. Switch HD Rumble is down-mixed into the DualSense compatible
-heavy/light rumble bands; it cannot retain the original left/right HD-haptic spatial
-detail. NFC/amiibo is out of scope.
+in each full input report. Switch HD Rumble low/high frequency and amplitude commands
+are decoded per actuator and synthesized as a phase-continuous stereo PCM stream for
+the DualSense haptic actuators. Short amplitude ramps suppress clicks while preserving
+left/right spatial effects. The two controllers have different actuator mechanics, so
+the result is a frequency-faithful translation rather than physically identical output.
+A 500 ms command watchdog ramps to silence if the USB host disappears while rumble is
+active. NFC/amiibo is out of scope.
 
 ### BOOTSEL button: pair, change USB mode, or clear controllers
 

@@ -9,18 +9,34 @@
 
 #include <cstdint>
 
-struct SwitchRumbleState {
-    // DualSense compatible-rumble motor values. The heavy motor carries the
-    // Switch low-frequency component and the light motor carries the
-    // high-frequency component.
-    uint8_t heavy = 0;
-    uint8_t light = 0;
+struct SwitchRumbleBand {
+    uint16_t frequency_hz = 0;
+    uint8_t amplitude = 0;
 
-    bool operator==(const SwitchRumbleState &) const = default;
+    bool operator==(const SwitchRumbleBand &) const = default;
 };
 
-// Decode the two four-byte Switch linear-actuator commands into the two
-// frequency bands available through DualSense compatible rumble.
+struct SwitchRumbleActuator {
+    SwitchRumbleBand low{};
+    SwitchRumbleBand high{};
+
+    bool operator==(const SwitchRumbleActuator &) const = default;
+};
+
+struct SwitchRumbleState {
+    SwitchRumbleActuator left{};
+    SwitchRumbleActuator right{};
+
+    bool operator==(const SwitchRumbleState &) const = default;
+
+    bool silent() const {
+        return left.low.amplitude == 0 && left.high.amplitude == 0 &&
+               right.low.amplitude == 0 && right.high.amplitude == 0;
+    }
+};
+
+// Decode the two four-byte Switch linear-actuator commands. Each actuator can
+// request a low- and high-frequency component at independent amplitudes.
 SwitchRumbleState switch_decode_hd_rumble(const uint8_t rumble_data[8]);
 
 #endif // DS5_BRIDGE_SWITCH_RUMBLE_H

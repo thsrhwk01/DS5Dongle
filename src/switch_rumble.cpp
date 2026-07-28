@@ -64,21 +64,49 @@ uint8_t amplitude_code_to_u8(uint8_t code) {
     return static_cast<uint8_t>((amplitude_milli * 255u + 501u) / 1003u);
 }
 
+uint16_t frequency_code_to_hz(const uint8_t code) {
+    // Nintendo's table is 10 * 2^(code / 32). Start at code 0x40 (40 Hz)
+    // and step with a Q16 approximation of 2^(1/32). The complete encoded
+    // range tops out near 1.25 kHz, below the 1.5 kHz Nyquist limit of the
+    // DualSense 3 kHz haptics stream used by this firmware.
+    uint32_t frequency_millihz = 40000;
+    for (uint8_t i = 0x40; i < code; ++i) {
+        frequency_millihz = static_cast<uint32_t>(
+            (static_cast<uint64_t>(frequency_millihz) * 66971u + 0x8000u) >> 16);
+    }
+    return static_cast<uint16_t>((frequency_millihz + 500u) / 1000u);
+}
+
+uint16_t decode_high_frequency(const uint8_t data[4]) {
+    const uint16_t encoded = static_cast<uint16_t>(data[0]) |
+                             (static_cast<uint16_t>(data[1] & 1u) << 8);
+    return frequency_code_to_hz(static_cast<uint8_t>(0x60u + (encoded >> 2)));
+}
+
+uint16_t decode_low_frequency(const uint8_t data[4]) {
+    return frequency_code_to_hz(static_cast<uint8_t>(0x40u + (data[2] & 0x7fu)));
+}
+
+SwitchRumbleActuator decode_actuator(const uint8_t data[4]) {
+    return {
+        .low = {
+            .frequency_hz = decode_low_frequency(data),
+            .amplitude = amplitude_code_to_u8(decode_low_amplitude_code(data)),
+        },
+        .high = {
+            .frequency_hz = decode_high_frequency(data),
+            .amplitude = amplitude_code_to_u8(decode_high_amplitude_code(data)),
+        },
+    };
+}
+
 } // namespace
 
 SwitchRumbleState switch_decode_hd_rumble(const uint8_t rumble_data[8]) {
     if (rumble_data == nullptr) return {};
 
-    const uint8_t left_high = amplitude_code_to_u8(decode_high_amplitude_code(rumble_data));
-    const uint8_t left_low = amplitude_code_to_u8(decode_low_amplitude_code(rumble_data));
-    const uint8_t right_high = amplitude_code_to_u8(decode_high_amplitude_code(rumble_data + 4));
-    const uint8_t right_low = amplitude_code_to_u8(decode_low_amplitude_code(rumble_data + 4));
-
-    // DualSense classic rumble exposes frequency bands, not the Switch's
-    // left/right spatial actuators. Preserve the strongest requested energy
-    // in each band when down-mixing the two Switch actuators.
     return {
-        .heavy = std::max(left_low, right_low),
-        .light = std::max(left_high, right_high),
+        .left = decode_actuator(rumble_data),
+        .right = decode_actuator(rumble_data + 4),
     };
 }

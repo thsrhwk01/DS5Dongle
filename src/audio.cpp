@@ -88,6 +88,32 @@ bool audio_mic_active() {
     return mic_active;
 }
 
+void audio_send_haptics_pcm(const int8_t *samples, size_t frames) {
+    constexpr size_t HAPTICS_PACKET_FRAMES = SAMPLE_SIZE;
+    if (samples == nullptr || frames != HAPTICS_PACKET_FRAMES) return;
+
+    // Bluetooth audio report 0x39 carries two 64-byte haptics blocks. In
+    // Switch mode there is no USB audio interface, so populate only the stereo
+    // haptics payload and leave the optional speaker/voice buffers absent.
+    uint8_t pkt[REPORT_SIZE]{};
+    pkt[0] = REPORT_ID;
+    pkt[1] = reportSeqCounter << 4;
+    reportSeqCounter = (reportSeqCounter + 1) & 0x0F;
+    pkt[2] = 0x11 | 1 << 7;
+    pkt[3] = 6;
+    pkt[4] = 0b01111110;
+    const auto buf_len = get_config().audio_buffer_length;
+    pkt[5] = buf_len;
+    pkt[6] = buf_len;
+    pkt[7] = buf_len;
+    pkt[8] = buf_len;
+    pkt[9] = packetCounter += 2;
+    pkt[10] = 0x12 | 1 << 6 | 1 << 7;
+    pkt[11] = SAMPLE_SIZE;
+    memcpy(pkt + 12, samples, frames * 2);
+    bt_write(pkt, sizeof(pkt));
+}
+
 void update_mic_status() {
     uint8_t pkt[142]{};
     pkt[0] = 0x32;
