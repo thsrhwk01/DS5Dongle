@@ -1,6 +1,8 @@
-# Pico2W DualSense 5 Bridge
+# Pico DualSense Switch Bridge
 [English](./README.md)
-> 将 Pico2W 变成 DS5 手柄的无线适配器
+> 使用 Pico 2 W 将蓝牙 DualSense 转换为 PC DualSense 或 Switch 2 Pro Controller USB 模式。
+
+> 此翻译来自上游项目，尚未涵盖本分支的全部功能。英文 README 是当前的权威文档。
 
 # 功能特点
  - 支持HD震动
@@ -27,7 +29,7 @@ Pico W 由于性能问题，只能支持震动，不支持扬声器。
 你可以通过开启 `-DPICO_W_BUILD=ON` 编译项去开启 Pico W 固件编译，或者在 Github Action 下载预编译的固件
 
 ### USB 唤醒支持
-这是一项实验性的功能。如果你需要该功能，请前往 feat/usb-wake 分支进行编译，或者使用该分支对应的 Github Action 预编译固件。`ds5-bridge-wake.uf2` 为该功能的固件
+这是一项实验性的功能。如果你需要该功能，请前往 feat/usb-wake 分支进行编译，或者使用该分支对应的 Github Action 预编译固件。`pico-dualsense-switch-bridge-wake.uf2` 为该功能的固件
 
 极为建议在使用该功能前阅读  #60 和 #61
 

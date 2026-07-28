@@ -1,24 +1,41 @@
-# Pico2W DualSense / Switch Pro Bridge
+# Pico DualSense Switch Bridge
 
-[中文](./README.CN.md)
+> Use a Raspberry Pi Pico 2 W to bridge a Bluetooth DualSense or DualSense Edge
+> controller to either a wired DualSense USB device for PC or a wired Nintendo
+> Switch Pro Controller USB device for Nintendo Switch 2.
 
-> Bridge a Bluetooth DualSense controller to a USB DualSense or Nintendo Switch Pro Controller profile.
-
-***This repository only implements the core functionality of DS5Dongle — making a wireless controller appear as a wired
-connection. For additional features, please refer to [Community Fork](#Community-Fork)***
+This project is a fork of [awalol/DS5Dongle](https://github.com/awalol/DS5Dongle).
+It preserves the original PC DualSense bridge and adds a runtime-selectable,
+Switch 2-compatible Nintendo Switch Pro Controller profile. See
+[Credits and license](#credits-and-license) for the upstream and protocol sources.
 
 ## Overview
 
-This project enables the Raspberry Pi Pico2W (or another compatible board, e.g. the Waveshare RP2350B-Plus-W) to bridge a Bluetooth DualSense or DualSense Edge controller to either a USB DualSense device or a USB Nintendo Switch Pro Controller profile.
+The controller stays paired with the Pico over Bluetooth. The Pico exposes one USB
+profile at a time and remembers the selected profile across power cycles.
+
+| USB profile | Intended host | USB identity | Key capabilities |
+|---|---|---|---|
+| DualSense | Windows / PC | DualSense or DualSense Edge | Native inputs, touchpad, motion, adaptive triggers, haptics, speaker, headset and microphone |
+| Switch Pro | Nintendo Switch 2 | Nintendo Switch Pro Controller (`057E:2009`) | Buttons, sticks, digital ZL/ZR, Home, Capture, motion and translated HD Rumble |
+
+The Switch profile uses the original Nintendo Switch Pro Controller protocol, not the
+new Switch 2 Pro Controller protocol. Switch 2 therefore requires **Nintendo Switch Pro
+Controller Wired Communication** to be enabled in console settings. Switch input uses
+the original Pro Controller's 8 ms USB interval (125 Hz). NFC/amiibo and the Switch 2
+`C` button are not supported.
 
 ## Features
 
-- 🎮 Full DualSense connectivity via Pico2W (or other compatible board)
-- 🔊 Supports HD haptics (advanced vibration feedback)
+- 🎮 Runtime-selectable DualSense and Nintendo Switch Pro USB profiles
+- 🔁 The selected USB profile persists across reconnects and power cycles
+- 🎮 Full DualSense and DualSense Edge connectivity via Pico 2 W
+- 🌀 DualSense gyro and accelerometer conversion for the Switch Pro motion format
+- 🔊 Switch HD Rumble decoding and stereo PCM synthesis for the DualSense actuators
+- ✨ Native DualSense haptics and adaptive triggers in PC mode
 - 🎧 Headset audio output — controller speaker and 3.5 mm jack
 - 🎤 Headset microphone input — the controller mic is exposed as a USB audio input device
 - 📡 Wireless Bluetooth bridging
-- 🎮 Runtime-selectable DualSense and Nintendo Switch Pro USB profiles
 - 🔘 BOOTSEL-button management — pair, change USB profile, enter BOOTSEL for flashing, or forget pairings without unplugging
 - ⚡ Runs at the stock 150 MHz clock — no overclock required
 
@@ -29,7 +46,7 @@ This project enables the Raspberry Pi Pico2W (or another compatible board, e.g. 
 You have two options:
 
 - **Download a pre-built `.uf2`** — grab the newest
-  [Releases](../../releases) build (`ds5-bridge-<version>.uf2`; other board
+  [Releases](../../releases) build (`pico-dualsense-switch-bridge-<version>.uf2`; other board
   builds are bundled in `other board.zip`; `config_tool.py` is attached there
   too). No tools needed.
 - **Build it yourself** — see [Build Instructions](#build-instructions)
@@ -59,23 +76,25 @@ The default profile is **DualSense** for Windows. While the firmware is running,
 double-click BOOTSEL to switch to **Nintendo Switch Pro Controller** output; double-click
 again to return to DualSense. The selected profile is saved in flash and restored on
 the next boot. USB disconnects and reconnects automatically when the profile changes.
+The DualSense remains paired with the Pico, so changing USB profiles does not require
+Bluetooth pairing again.
 
 Do not hold BOOTSEL while plugging the Pico in to select a profile: the RP2350 boot ROM
 uses that gesture for UF2 flashing, so the application firmware does not run. Profile
 selection is deliberately a runtime double click.
 
-For Switch 2, enable **Nintendo Switch Pro Controller Wired Communication** in the
-console settings. The Switch profile supports buttons, D-pad, both sticks, digital
-ZL/ZR, Plus/Minus, Home, Capture, pairing/reconnection, USB initialization, motion
-sensors, and rumble. DualSense gyro/accelerometer samples are transformed into the
-Switch Pro coordinate system and native units, with the three most recent samples sent
-in each full input report. Switch HD Rumble low/high frequency and amplitude commands
-are decoded per actuator and synthesized as a phase-continuous stereo PCM stream for
-the DualSense haptic actuators. Short amplitude ramps suppress clicks while preserving
-left/right spatial effects. The two controllers have different actuator mechanics, so
-the result is a frequency-faithful translation rather than physically identical output.
-A 500 ms command watchdog ramps to silence if the USB host disappears while rumble is
-active. NFC/amiibo is out of scope.
+For Switch 2, open **System Settings → Controllers & Accessories** and enable
+**Nintendo Switch Pro Controller Wired Communication**. Switch to the Pro profile,
+then physically reconnect the Pico to the dock for the first test. DualSense mode is
+not natively recognized by Switch 2.
+
+The Switch profile transforms DualSense motion samples into Switch axes and native
+units, placing the three newest samples in every full input report. HD Rumble's two
+frequency bands and amplitudes are decoded independently for the left and right
+actuators, then rendered as phase-continuous stereo PCM for the DualSense haptics. The
+actuator mechanics differ, so this is a frequency-faithful translation rather than
+physically identical vibration. A 500 ms watchdog ramps the actuators to silence if
+the USB host disappears while rumble is active.
 
 ### BOOTSEL button: pair, change USB mode, or clear controllers
 
@@ -107,7 +126,7 @@ controller and USB-profile control — no unplugging or re-flashing needed:
 
 ## Configuration
 
-You can modify the Pico settings via the web config.
+You can modify the Pico settings via the upstream-compatible web config.
 
 - For release: https://ds5.awalol.eu.org
 - For development: https://ds5-dev.awalol.eu.org
@@ -179,14 +198,14 @@ The [Waveshare RP2350B-Plus-W](https://www.waveshare.com/wiki/RP2350B-Plus-W) is
 ```
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
       -DPICO_SDK_PATH=<sdk> -DWAVESHARE_RP2350B_PLUS_W_BUILD=ON
-cmake --build build --target ds5-bridge
+cmake --build build --target pico-dualsense-switch-bridge
 ```
 
 Or download precompiled firmware from GitHub Actions.
 
 ### USB Wake Feature
 
-Wake-on-PS is now built into the standard firmware — there is no separate `feat/usb-wake` branch or `ds5-bridge-wake.uf2`
+Wake-on-PS is now built into the standard firmware — there is no separate `feat/usb-wake` branch or `pico-dualsense-switch-bridge-wake.uf2`
 build. It is **disabled by default**; turn it on with the **Wake PC from sleep on PS button** toggle in the
 [web config](#configuration). When enabled, the dongle presents a HID keyboard interface and advertises USB remote
 wakeup so a controller button can wake the PC; when disabled, that interface is not enumerated. See
@@ -232,8 +251,9 @@ repo root instead — it detects and uses your local checkout.)
 The script installs every prerequisite (CMake, Ninja, Python, Git and the
 ARM GNU toolchain — via `winget`, falling back to portable downloads if
 `winget` is unavailable), clones the project (if not run from a checkout)
-plus the pinned Pico SDK + TinyUSB into `%USERPROFILE%\.ds5-build`, builds
-the firmware, and drops `ds5-bridge.uf2` next to the script and on your
+plus the pinned Pico SDK + TinyUSB into
+`%USERPROFILE%\.pico-dualsense-switch-bridge-build`, builds
+the firmware, and drops `pico-dualsense-switch-bridge.uf2` next to the script and on your
 Desktop. It is safe to re-run; already-installed tools are skipped.
 
 Build a fork or a specific ref with `-Repo <url>` / `-Ref <branch|tag>`.
@@ -244,15 +264,12 @@ Build a variant with `-Variant debug`.
 
 To build from source manually:
 
-1. Install the Pico SDK 2.3.0 and switch its TinyUSB submodule to tag 0.21.0
-   i.e. ***Update TinyUSB in the Pico SDK to the latest version***
+1. Install Pico SDK 2.3.0 and switch its TinyUSB submodule to commit
+   `2d56dc533e45e4e91b15e93fdab5e22e964f328d`.
 2. Initialise this repo's submodules: `git submodule update --init --recursive`
 3. Configure and build with the standard Pico SDK toolchain:
    `cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPICO_SDK_PATH=<sdk>`
-   then `cmake --build build --target ds5-bridge`
-
-1. ***Update TinyUSB in the Pico SDK to the latest version***
-2. Compile using standard Pico SDK toolchain
+   then `cmake --build build --target pico-dualsense-switch-bridge`
 
 On macOS, `tools/build-macos.sh` can prepare a repo-local Pico SDK checkout, prompt to install missing Homebrew build
 tools, initialize submodules, pin TinyUSB, and build the firmware:
@@ -319,18 +336,36 @@ After enabling the toggle (then **Reconnect USB** so the interface re-enumerates
 
 ## Roadmap
 
-- Please check out [DS5Dongle plan](https://github.com/users/awalol/projects/5)
+- Complete Switch 2 hardware validation and add compact USB-handshake diagnostics
+- Make Switch protocol replies resilient to endpoint backpressure and reconnects
+- Tune motion calibration and the HD Rumble transfer curve on physical controllers
 
 ## Community
 
-- Join the Discord server: [Discord Server](https://discord.gg/hM4ntchGCa)
-- If you have a bug, please open an issue instead.
+- For this fork, report reproducible problems in this repository's issue tracker.
+- For upstream DS5Dongle discussion, join the
+  [upstream Discord server](https://discord.gg/hM4ntchGCa).
 
 ## References
 
+- [awalol/DS5Dongle](https://github.com/awalol/DS5Dongle) — upstream firmware
+- [OpenStickCommunity/GP2040-CE Switch Pro driver](https://github.com/OpenStickCommunity/GP2040-CE/pull/1365) — Switch Pro USB protocol reference
+- [Nintendo Switch accessories on Switch 2](https://support.nintendo.com/jp/switch2/accessory/controller/switch-controller/index.html) — wired communication requirement
 - [rafaelvaloto/Pico_W-Dualsense](https://github.com/rafaelvaloto/Pico_W-Dualsense) — Project inspiration
 - [egormanga/SAxense](https://apps.sdore.me/SAxense) — Bluetooth Haptics POC
 - [https://controllers.fandom.com/wiki/Sony_DualSense](https://controllers.fandom.com/wiki/Sony_DualSense) - DualSense
   data report structure documentation
 - [Paliverse/DualSenseX](https://github.com/Paliverse/DualSenseX) — Speaker report packet
 - [Nielk1’s research report and packet samples](https://github.com/egormanga/SAxense/issues/1)
+
+## Credits and license
+
+Pico DualSense Switch Bridge is derived from
+[awalol/DS5Dongle](https://github.com/awalol/DS5Dongle). The Switch Pro USB profile
+is based on the MIT-licensed GP2040-CE Switch Pro driver and related Nintendo Switch
+protocol research. Existing copyright and SPDX notices are retained in the reused
+source files.
+
+The project is distributed under the [MIT License](LICENSE). It is an independent
+community project and is not affiliated with or endorsed by Sony Interactive
+Entertainment or Nintendo.

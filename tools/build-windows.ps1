@@ -1,14 +1,14 @@
 <#
 .SYNOPSIS
-    One-command builder for the Pico2W DualSense 5 Bridge firmware on Windows 11
+    One-command builder for Pico DualSense Switch Bridge on Windows 11
     (no WSL required).
 
 .DESCRIPTION
     Installs every prerequisite (winget where possible, portable downloads as a
     fallback), fetches the pinned Raspberry Pi Pico SDK + TinyUSB, initialises
     this repo's submodules, then configures and builds the firmware with CMake +
-    Ninja. The resulting ds5-bridge.uf2 is copied next to this script and onto
-    your Desktop.
+    Ninja. The resulting pico-dualsense-switch-bridge.uf2 is copied next to this
+    script and onto your Desktop.
 
     The script is idempotent: re-running it skips anything already installed or
     downloaded.
@@ -23,8 +23,7 @@
 
 .PARAMETER Repo
     When run standalone (the script is not inside a checkout), the project
-    git URL to clone. Defaults to the upstream project. Override to build a
-    fork.
+    git URL to clone. Defaults to this project. Override to build another fork.
 
 .PARAMETER Ref
     Branch, tag or commit to build when cloned standalone. Empty = the
@@ -32,7 +31,7 @@
 
 .EXAMPLE
     # Standalone: download just this file anywhere and run it - it clones
-    # the project under %USERPROFILE%\.ds5-build and builds it.
+    # the project under %USERPROFILE%\.pico-dualsense-switch-bridge-build and builds it.
     powershell -ExecutionPolicy Bypass -File .\build-windows.ps1
 
 .EXAMPLE
@@ -40,7 +39,7 @@
     powershell -ExecutionPolicy Bypass -File tools\build-windows.ps1 -Variant wake
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File .\build-windows.ps1 -Repo https://github.com/youruser/DS5Dongle.git -Ref master
+    powershell -ExecutionPolicy Bypass -File .\build-windows.ps1 -Repo https://github.com/thsrhwk01/Pico-DualSense-Switch-Bridge.git -Ref master
 #>
 
 [CmdletBinding()]
@@ -50,7 +49,7 @@ param(
     [switch]$Clean,
     # Project to build when this script is run standalone (not from inside a
     # checkout). Override to build a fork.
-    [string]$Repo = 'https://github.com/awalol/DS5Dongle.git',
+    [string]$Repo = 'https://github.com/thsrhwk01/Pico-DualSense-Switch-Bridge.git',
     # Branch/tag/SHA to build when cloned standalone. Empty = default branch.
     [string]$Ref = ''
 )
@@ -59,31 +58,31 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 # Bump on every change so a stale download is obvious in the banner.
-$SCRIPT_REV   = '2026-05-16.7'
+$SCRIPT_REV   = '2026-07-28.1'
 
-# --- Pinned versions: keep in sync with .github/workflows/build-firmware.yml ---
-$PICO_SDK_REF = '2.2.0'
-$TINYUSB_REF  = '0.20.0'
+# Pico SDK and TinyUSB pins must match .github/workflows/build-firmware.yml.
+$PICO_SDK_REF = '2.3.0'
+$TINYUSB_REF  = '2d56dc533e45e4e91b15e93fdab5e22e964f328d'
 $ARM_VER      = '14.2.rel1'
 $ARM_ZIP      = "arm-gnu-toolchain-$ARM_VER-mingw-w64-x86_64-arm-none-eabi.zip"
 $ARM_URL      = "https://developer.arm.com/-/media/Files/downloads/gnu/$ARM_VER/binrel/$ARM_ZIP"
 # Portable native host compiler (WinLibs MinGW-w64 UCRT) for pioasm/picotool.
 $MINGW_URL    = 'https://github.com/brechtsanders/winlibs_mingw/releases/download/14.2.0posix-19.1.1-12.0.0-ucrt-r2/winlibs-x86_64-posix-seh-gcc-14.2.0-mingw-w64ucrt-12.0.0-r2.zip'
 
-$ToolsHome = Join-Path $env:USERPROFILE '.ds5-build'
+$ToolsHome = Join-Path $env:USERPROFILE '.pico-dualsense-switch-bridge-build'
 $SdkPath   = Join-Path $ToolsHome 'pico-sdk'
 $ArmRoot   = Join-Path $ToolsHome 'arm-gnu-toolchain'
-$ClonePath = Join-Path $ToolsHome 'DS5Dongle'
+$ClonePath = Join-Path $ToolsHome 'Pico-DualSense-Switch-Bridge'
 # $RepoRoot is resolved at runtime (Resolve-RepoRoot) - either an existing
 # checkout this script sits in, or a fresh clone under $ToolsHome.
 $RepoRoot  = $null
 $GitExit   = 0     # last git exit code, set by Invoke-GitQuiet
 $PythonExe = $null # real Python 3 interpreter, set by Resolve-Python
 
-function Info  ($m) { Write-Host "[ds5] $m"            -ForegroundColor Cyan }
-function Ok    ($m) { Write-Host "[ds5] $m"            -ForegroundColor Green }
-function Warn  ($m) { Write-Host "[ds5] WARNING: $m"   -ForegroundColor Yellow }
-function Die   ($m) { Write-Host "[ds5] ERROR: $m"     -ForegroundColor Red; exit 1 }
+function Info  ($m) { Write-Host "[bridge] $m"            -ForegroundColor Cyan }
+function Ok    ($m) { Write-Host "[bridge] $m"            -ForegroundColor Green }
+function Warn  ($m) { Write-Host "[bridge] WARNING: $m"   -ForegroundColor Yellow }
+function Die   ($m) { Write-Host "[bridge] ERROR: $m"     -ForegroundColor Red; exit 1 }
 
 function Have ($cmd) { [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
 
@@ -247,7 +246,7 @@ function Ensure-HostCompiler {
     Ok "Host compiler: $binDir"
 }
 
-# --- Pico SDK 2.2.0 + TinyUSB 0.20.0 (mirrors build-firmware.yml) -------------
+# --- Pico SDK + TinyUSB refs (mirrors build-firmware.yml) --------------------
 function Ensure-PicoSdk {
     if (-not (Test-Path (Join-Path $SdkPath 'pico_sdk_init.cmake'))) {
         Info "Cloning Pico SDK $PICO_SDK_REF..."
@@ -258,11 +257,11 @@ function Ensure-PicoSdk {
         Ok 'Pico SDK already present.'
     }
     $tinyusb = Join-Path $SdkPath 'lib\tinyusb'
-    $onTag = (git -C $tinyusb describe --tags --exact-match 2>$null)
-    if ($onTag -ne $TINYUSB_REF) {
+    $tinyusbHead = (git -C $tinyusb rev-parse HEAD 2>$null | Select-Object -Last 1)
+    if ($tinyusbHead -ne $TINYUSB_REF) {
         Info "Switching TinyUSB to $TINYUSB_REF..."
-        if (-not (git -C $tinyusb rev-parse -q --verify "refs/tags/$TINYUSB_REF" 2>$null)) {
-            git -C $tinyusb fetch --depth 1 origin "refs/tags/${TINYUSB_REF}:refs/tags/$TINYUSB_REF"
+        if (-not (git -C $tinyusb rev-parse -q --verify "${TINYUSB_REF}^{commit}" 2>$null)) {
+            git -C $tinyusb fetch --depth 1 origin $TINYUSB_REF
         }
         git -C $tinyusb checkout --detach $TINYUSB_REF
     } else {
@@ -271,10 +270,10 @@ function Ensure-PicoSdk {
 }
 
 # --- Locate the project: existing checkout, or clone under $ToolsHome --------
-function Test-Ds5Checkout ($dir) {
+function Test-BridgeCheckout ($dir) {
     if (-not $dir) { return $false }
     $cml = Join-Path $dir 'CMakeLists.txt'
-    return (Test-Path $cml) -and (Select-String -Path $cml -Pattern 'ds5-bridge' -Quiet)
+    return (Test-Path $cml) -and (Select-String -Path $cml -Pattern 'pico-dualsense-switch-bridge' -Quiet)
 }
 
 # Runs git so NOTHING reaches the pipeline: every stream is written to the
@@ -301,7 +300,7 @@ function Resolve-RepoRoot {
     $script:RepoRoot = $null
     # Run from inside a checkout? (script at <repo>/tools/ or at <repo>/)
     foreach ($cand in @((Split-Path -Parent $PSScriptRoot), $PSScriptRoot)) {
-        if (Test-Ds5Checkout $cand) {
+        if (Test-BridgeCheckout $cand) {
             Ok "Using existing checkout: $cand"
             $script:RepoRoot = $cand
             return
@@ -330,7 +329,7 @@ function Resolve-RepoRoot {
         }
         if (-not (Test-Path (Join-Path $ClonePath '.git'))) { Die "Failed to clone $Repo" }
     }
-    if (-not (Test-Ds5Checkout $ClonePath)) { Die "Clone at $ClonePath is not a DS5Dongle project." }
+    if (-not (Test-BridgeCheckout $ClonePath)) { Die "Clone at $ClonePath is not a Pico DualSense Switch Bridge project." }
     $script:RepoRoot = $ClonePath
 }
 
@@ -401,7 +400,7 @@ function Resolve-Python {
 # ---------------------------------------------------------------------------- #
 #  Main                                                                        #
 # ---------------------------------------------------------------------------- #
-Info "DS5Dongle Windows builder (rev $SCRIPT_REV) - variant: $Variant"
+Info "Pico DualSense Switch Bridge Windows builder (rev $SCRIPT_REV) - variant: $Variant"
 New-Item -ItemType Directory -Force -Path $ToolsHome | Out-Null
 Add-CommonToolPaths
 
@@ -439,8 +438,8 @@ Ensure-PicoSdk
 
 # --- Locate / fetch the project source --------------------------------------
 Resolve-RepoRoot   # sets $script:RepoRoot
-if (-not $RepoRoot -or -not (Test-Ds5Checkout $RepoRoot)) {
-    Die "Could not locate the DS5Dongle source (resolved: '$RepoRoot')."
+if (-not $RepoRoot -or -not (Test-BridgeCheckout $RepoRoot)) {
+    Die "Could not locate the Pico DualSense Switch Bridge source (resolved: '$RepoRoot')."
 }
 Ok "Project source: $RepoRoot"
 
@@ -471,15 +470,15 @@ Info "Configuring: cmake $($cmakeArgs -join ' ')"
 & cmake @cmakeArgs
 if ($LASTEXITCODE -ne 0) { Die 'CMake configure failed.' }
 
-Info 'Building ds5-bridge...'
-& cmake --build $buildDir --target ds5-bridge
+Info 'Building pico-dualsense-switch-bridge...'
+& cmake --build $buildDir --target pico-dualsense-switch-bridge
 if ($LASTEXITCODE -ne 0) { Die 'Build failed.' }
 
 # --- Collect output ----------------------------------------------------------
-$uf2 = Join-Path $buildDir 'ds5-bridge.uf2'
+$uf2 = Join-Path $buildDir 'pico-dualsense-switch-bridge.uf2'
 if (-not (Test-Path $uf2)) { Die "Expected $uf2 was not produced." }
 
-$outName = if ($Variant -eq 'standard') { 'ds5-bridge.uf2' } else { "ds5-bridge-$Variant.uf2" }
+$outName = if ($Variant -eq 'standard') { 'pico-dualsense-switch-bridge.uf2' } else { "pico-dualsense-switch-bridge-$Variant.uf2" }
 $nextToScript = Join-Path $PSScriptRoot $outName
 Copy-Item $uf2 $nextToScript -Force
 $desktop = [Environment]::GetFolderPath('Desktop')

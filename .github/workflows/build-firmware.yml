@@ -89,7 +89,7 @@ jobs:
                   "name": "Standard firmware",
                   "build_dir": "standard",
                   "cmake_args": "",
-                  "artifact": "ds5-bridge",
+                  "artifact": "pico-dualsense-switch-bridge",
                   "upload_artifact": True,
               },
               {
@@ -97,7 +97,7 @@ jobs:
                   "name": "Debug firmware",
                   "build_dir": "debug",
                   "cmake_args": "-DENABLE_SERIAL=ON -DENABLE_VERBOSE=ON -DWAKE_DEBUG=ON",
-                  "artifact": "ds5-bridge-debug",
+                  "artifact": "pico-dualsense-switch-bridge-debug",
                   "upload_artifact": True,
               },
           ]
@@ -109,7 +109,7 @@ jobs:
                       "name": "Pico W firmware",
                       "build_dir": "picow",
                       "cmake_args": "-DPICO_W_BUILD=ON",
-                      "artifact": "ds5-bridge-picow",
+                      "artifact": "pico-dualsense-switch-bridge-picow",
                       "upload_artifact": True,
                   }
               )
@@ -121,7 +121,7 @@ jobs:
                       "name": "Waveshare RP2350B-Plus-W firmware",
                       "build_dir": "waveshare",
                       "cmake_args": "-DWAVESHARE_RP2350B_PLUS_W_BUILD=ON",
-                      "artifact": "ds5-bridge-waveshare",
+                      "artifact": "pico-dualsense-switch-bridge-waveshare",
                       "upload_artifact": True,
                   }
               )
@@ -276,11 +276,11 @@ jobs:
             -DPICO_SDK_PATH="$PICO_SDK_PATH" \
             "${EXTRA_ARGS[@]}" \
             "${VERSION_ARG[@]}"
-          cmake --build "build/$BUILD_DIR" --target ds5-bridge
+          cmake --build "build/$BUILD_DIR" --target pico-dualsense-switch-bridge
 
           if [ -n "$ARTIFACT_BASENAME" ]; then
             mkdir -p artifacts
-            cp "build/$BUILD_DIR/ds5-bridge.uf2" "artifacts/${ARTIFACT_BASENAME}${ASSET_SUFFIX}.uf2"
+            cp "build/$BUILD_DIR/pico-dualsense-switch-bridge.uf2" "artifacts/${ARTIFACT_BASENAME}${ASSET_SUFFIX}.uf2"
           fi
 
       - name: Upload ${{ matrix.name }} artifact
@@ -310,7 +310,7 @@ jobs:
       - name: Download UF2 artifacts
         uses: actions/download-artifact@v8
         with:
-          pattern: ds5-bridge*
+          pattern: pico-dualsense-switch-bridge*
           path: artifacts
           merge-multiple: true
           # UF2s are uploaded with archive:false, so download them as raw files.
@@ -325,12 +325,12 @@ jobs:
           rm -rf release-assets other-boards
           mkdir -p release-assets other-boards
 
-          standard="artifacts/ds5-bridge${ASSET_SUFFIX}.uf2"
+          standard="artifacts/pico-dualsense-switch-bridge${ASSET_SUFFIX}.uf2"
           if [ ! -f "$standard" ]; then
             echo "Missing standard firmware: $standard" >&2
             exit 1
           fi
-          cp "$standard" "release-assets/ds5-bridge${ASSET_SUFFIX}.uf2"
+          cp "$standard" "release-assets/pico-dualsense-switch-bridge${ASSET_SUFFIX}.uf2"
 
           config_tool="tools/config_tool.py"
           if [ ! -f "$config_tool" ]; then
@@ -343,7 +343,7 @@ jobs:
           for uf2 in artifacts/*.uf2; do
             name="$(basename "$uf2")"
             case "$name" in
-              "ds5-bridge${ASSET_SUFFIX}.uf2" | "ds5-bridge-debug${ASSET_SUFFIX}.uf2")
+              "pico-dualsense-switch-bridge${ASSET_SUFFIX}.uf2" | "pico-dualsense-switch-bridge-debug${ASSET_SUFFIX}.uf2")
                 continue
                 ;;
             esac
@@ -364,10 +364,10 @@ jobs:
           set -euo pipefail
 
           for name in \
-            "ds5-bridge.uf2" \
-            "ds5-bridge-debug${ASSET_SUFFIX}.uf2" \
-            "ds5-bridge-picow${ASSET_SUFFIX}.uf2" \
-            "ds5-bridge-waveshare${ASSET_SUFFIX}.uf2"
+            "pico-dualsense-switch-bridge.uf2" \
+            "pico-dualsense-switch-bridge-debug${ASSET_SUFFIX}.uf2" \
+            "pico-dualsense-switch-bridge-picow${ASSET_SUFFIX}.uf2" \
+            "pico-dualsense-switch-bridge-waveshare${ASSET_SUFFIX}.uf2"
           do
             gh release delete-asset "$UPLOAD_TAG" "$name" \
               --repo "$GH_REPO" --yes 2>/dev/null || true

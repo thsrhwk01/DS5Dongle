@@ -2,8 +2,8 @@
 # renaming them to .time_critical.<fn>, which the Pico SDK linker places in RAM
 # (LMA flash, VMA RAM). Run at PRE_LINK because the object's location under the
 # target's .dir depends on where PICO_SDK_PATH sits: in-tree in CI
-# (CMakeFiles/ds5-bridge.dir/pico-sdk/...) vs out-of-tree locally
-# (.../ds5-bridge.dir/<absolute-sdk-path>/...). So we locate the object by its
+# (CMakeFiles/pico-dualsense-switch-bridge.dir/pico-sdk/...) vs out-of-tree locally
+# (.../pico-dualsense-switch-bridge.dir/<absolute-sdk-path>/...). So we locate the object by its
 # stable SDK-relative path suffix rather than hardcoding the mirrored path.
 #
 # Args (via -D): OBJROOT  (CMakeFiles/<target>.dir)

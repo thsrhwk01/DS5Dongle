@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PICO_SDK_VERSION="2.2.0"
-TINYUSB_VERSION="0.20.0"
+PICO_SDK_VERSION="2.3.0"
+TINYUSB_VERSION="2d56dc533e45e4e91b15e93fdab5e22e964f328d"
 BUILD_TYPE="Release"
 BUILD_DIR="build/wake"
 ENABLE_WAKE_HID="ON"
@@ -16,7 +16,7 @@ usage() {
   cat <<'USAGE'
 Usage: tools/build-macos.sh [options]
 
-Build DS5Dongle on macOS using a repo-local Pico SDK checkout.
+Build Pico DualSense Switch Bridge on macOS using a repo-local Pico SDK checkout.
 
 Options:
   --standard          Build standard firmware without ENABLE_WAKE_HID.
@@ -204,8 +204,10 @@ TINYUSB_DIR="$SDK_DIR/lib/tinyusb"
 git -C "$TINYUSB_DIR" rev-parse --git-dir >/dev/null 2>&1 || die "TinyUSB submodule not found at $TINYUSB_DIR"
 
 echo "Preparing TinyUSB $TINYUSB_VERSION..."
-git -C "$TINYUSB_DIR" fetch --tags
-git -C "$TINYUSB_DIR" checkout "$TINYUSB_VERSION"
+if ! git -C "$TINYUSB_DIR" rev-parse -q --verify "$TINYUSB_VERSION^{commit}" >/dev/null; then
+  git -C "$TINYUSB_DIR" fetch --depth 1 origin "$TINYUSB_VERSION"
+fi
+git -C "$TINYUSB_DIR" checkout --detach "$TINYUSB_VERSION"
 git -C "$TINYUSB_DIR" submodule update --init --recursive
 
 if [[ "$CLEAN_BUILD" == "ON" ]]; then
@@ -235,8 +237,8 @@ echo "Configuring firmware..."
 cmake "${CMAKE_ARGS[@]}"
 
 echo "Building firmware..."
-cmake --build "$BUILD_DIR" --target ds5-bridge
+cmake --build "$BUILD_DIR" --target pico-dualsense-switch-bridge
 
 echo
 echo "Built firmware:"
-echo "  $ROOT/$BUILD_DIR/ds5-bridge.uf2"
+echo "  $ROOT/$BUILD_DIR/pico-dualsense-switch-bridge.uf2"

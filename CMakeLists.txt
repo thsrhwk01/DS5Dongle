@@ -45,10 +45,10 @@ endif ()
 
 # Diagnostic: confirm PICO_BOARD resolution actually applied. Build log will
 # show which board path was taken. Remove these once verified on hardware.
-message(STATUS "DS5Dongle build target -- PICO_BOARD=${PICO_BOARD}")
-message(STATUS "DS5Dongle build target -- PICO_W_BUILD=${PICO_W_BUILD}")
-message(STATUS "DS5Dongle build target -- WAVESHARE_RP2350B_PLUS_W_BUILD=${WAVESHARE_RP2350B_PLUS_W_BUILD}")
-message(STATUS "DS5Dongle build target -- PICO_BOARD_HEADER_DIRS=${PICO_BOARD_HEADER_DIRS}")
+message(STATUS "Pico DualSense Switch Bridge -- PICO_BOARD=${PICO_BOARD}")
+message(STATUS "Pico DualSense Switch Bridge -- PICO_W_BUILD=${PICO_W_BUILD}")
+message(STATUS "Pico DualSense Switch Bridge -- WAVESHARE_RP2350B_PLUS_W_BUILD=${WAVESHARE_RP2350B_PLUS_W_BUILD}")
+message(STATUS "Pico DualSense Switch Bridge -- PICO_BOARD_HEADER_DIRS=${PICO_BOARD_HEADER_DIRS}")
 #set(PICO_CYW43_SUPPORTED 1)
 #set(PICO_CYW43_ARCH_THREADSAFE_BACKGROUND 1)
 
@@ -102,14 +102,14 @@ endif ()
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 
-project(ds5-bridge C CXX ASM)
+project(pico-dualsense-switch-bridge C CXX ASM)
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(ds5-bridge
+add_executable(pico-dualsense-switch-bridge
         src/usb_descriptors.cpp
         src/main.cpp
         src/dualsense_parser.cpp
@@ -132,11 +132,11 @@ add_executable(ds5-bridge
 )
 
 if (ENABLE_DEBUG)
-        target_sources(ds5-bridge PRIVATE src/debug.cpp)
+        target_sources(pico-dualsense-switch-bridge PRIVATE src/debug.cpp)
 endif ()
 
 if (ENABLE_BATT_LED)
-        target_sources(ds5-bridge PRIVATE src/battery_led.cpp)
+        target_sources(pico-dualsense-switch-bridge PRIVATE src/battery_led.cpp)
 endif ()
 
 # Cockos WDLResampler
@@ -155,7 +155,7 @@ add_subdirectory(lib/opus)
 # libopus is built by add_subdirectory(lib/opus); the target `opus` is defined in
 # the subdirectory's CMakeLists.txt, so we can't use POST_BUILD here. Instead we
 # use a stamp-file custom command + custom target that runs after opus is built
-# and before ds5-bridge links. Renames .text and .rodata of libopus.a to
+# and before pico-dualsense-switch-bridge links. Renames .text and .rodata of libopus.a to
 # .time_critical.* which the Pico SDK linker places in RAM (loaded from flash
 # at boot, executed from RAM at runtime). ~220 KB total relocated, ~5-6 ms boot
 # time impact for the flash-to-RAM copy.
@@ -168,7 +168,7 @@ add_custom_command(
     VERBATIM
 )
 add_custom_target(opus_ram_relocate ALL DEPENDS ${CMAKE_BINARY_DIR}/opus_ram_relocate.stamp)
-add_dependencies(ds5-bridge opus_ram_relocate)
+add_dependencies(pico-dualsense-switch-bridge opus_ram_relocate)
 
 target_compile_options(wdl_resampler PRIVATE -fsigned-char)
 
@@ -189,7 +189,7 @@ add_custom_command(TARGET wdl_resampler POST_BUILD
 
 # Phases B.2-B.4: Move per-packet BT/USB hot-path functions that live in pristine
 # SDK/submodule sources (btstack, cyw43-driver, tinyusb, pico_util) into RAM. They
-# compile directly into ds5-bridge and can't take __not_in_flash_func at the source.
+# compile directly into pico-dualsense-switch-bridge and can't take __not_in_flash_func at the source.
 # Since -ffunction-sections is on, each function has its own .text.<name> section;
 # relocate_to_ram() renames the hot ones to .time_critical.<name> on the compiled
 # objects in a PRE_LINK step (after compile, before link), and the Pico SDK linker
@@ -199,9 +199,9 @@ add_custom_command(TARGET wdl_resampler POST_BUILD
 # locally). RENAMES are |-separated old=new pairs; objcopy skips an absent section,
 # so this is idempotent across incremental relinks.
 function(relocate_to_ram _suffix _renames _comment)
-    add_custom_command(TARGET ds5-bridge PRE_LINK
+    add_custom_command(TARGET pico-dualsense-switch-bridge PRE_LINK
         COMMAND ${CMAKE_COMMAND}
-            "-DOBJROOT=${CMAKE_BINARY_DIR}/CMakeFiles/ds5-bridge.dir"
+            "-DOBJROOT=${CMAKE_BINARY_DIR}/CMakeFiles/pico-dualsense-switch-bridge.dir"
             "-DOBJCOPY=${CMAKE_OBJCOPY}"
             "-DSUFFIX=${_suffix}"
             "-DRENAMES=${_renames}"
@@ -283,7 +283,7 @@ relocate_to_ram(lib/btstack/src/btstack_run_loop.c.o
 set_source_files_properties(src/ram_mem.c PROPERTIES COMPILE_OPTIONS
         "-fno-builtin;-fno-tree-loop-distribute-patterns")
 
-target_compile_options(ds5-bridge PRIVATE -fsigned-char)
+target_compile_options(pico-dualsense-switch-bridge PRIVATE -fsigned-char)
 target_compile_definitions(wdl_resampler PRIVATE
         WDL_RESAMPLE_TYPE=float
 )
@@ -293,8 +293,8 @@ else()
     set(PICO_FLASH_SPI_CLKDIV 2)
 endif()
 target_compile_definitions(bs2_default PRIVATE PICO_FLASH_SPI_CLKDIV=${PICO_FLASH_SPI_CLKDIV})
-target_compile_definitions(ds5-bridge PRIVATE PICO_EMBED_XIP_SETUP=1)
-target_compile_definitions(ds5-bridge PRIVATE
+target_compile_definitions(pico-dualsense-switch-bridge PRIVATE PICO_EMBED_XIP_SETUP=1)
+target_compile_definitions(pico-dualsense-switch-bridge PRIVATE
         CYW43_LWIP=0
         ENABLE_SERIAL=${ENABLE_SERIAL_VALUE}
         # 0 (not 1): flash_safe_execute() must really park core1 while flash is
@@ -318,30 +318,30 @@ target_compile_definitions(ds5-bridge PRIVATE
 # the wake/keyboard descriptors and TinyUSB capacity compile in; the interface and
 # behavior are only presented/run when enabled at runtime (see usb_descriptors.cpp,
 # wake.cpp).
-target_compile_definitions(ds5-bridge PRIVATE ENABLE_WAKE_HID)
-target_sources(ds5-bridge PRIVATE
+target_compile_definitions(pico-dualsense-switch-bridge PRIVATE ENABLE_WAKE_HID)
+target_sources(pico-dualsense-switch-bridge PRIVATE
         src/wake.cpp
         src/ps_shortcut.cpp
 )
 
 option(WAKE_DEBUG "Print wake-FSM transitions to UART (developer use)" OFF)
 if(WAKE_DEBUG)
-    target_compile_definitions(ds5-bridge PRIVATE
+    target_compile_definitions(pico-dualsense-switch-bridge PRIVATE
             WAKE_DEBUG
     )
 endif()
 
 set(VERSION "dev" CACHE STRING "Program version string")
 
-pico_set_program_name(ds5-bridge "ds5-bridge")
-pico_set_program_version(ds5-bridge "${VERSION}")
+pico_set_program_name(pico-dualsense-switch-bridge "pico-dualsense-switch-bridge")
+pico_set_program_version(pico-dualsense-switch-bridge "${VERSION}")
 
 # Modify the below lines to enable/disable output over UART/USB
-pico_enable_stdio_uart(ds5-bridge 1)
-pico_enable_stdio_usb(ds5-bridge ${ENABLE_SERIAL_VALUE})
+pico_enable_stdio_uart(pico-dualsense-switch-bridge 1)
+pico_enable_stdio_usb(pico-dualsense-switch-bridge ${ENABLE_SERIAL_VALUE})
 
 # Add the standard include files to the build
-#target_include_directories(ds5-bridge PRIVATE
+#target_include_directories(pico-dualsense-switch-bridge PRIVATE
 #        ${CMAKE_CURRENT_LIST_DIR}
 #)
 
@@ -350,7 +350,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 )
 
 # Add any user requested libraries
-target_link_libraries(ds5-bridge
+target_link_libraries(pico-dualsense-switch-bridge
         pico_stdlib
         pico_multicore
         hardware_watchdog
@@ -366,4 +366,4 @@ target_link_libraries(ds5-bridge
         opus
 )
 
-pico_add_extra_outputs(ds5-bridge)
+pico_add_extra_outputs(pico-dualsense-switch-bridge)
